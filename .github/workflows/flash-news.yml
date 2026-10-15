@@ -1,0 +1,47 @@
+# 全球财经快讯（增量推送）
+#
+# 放置位置：<你的 TrendRadar fork>/.github/workflows/flash-news.yml
+# 配套脚本：flash_news.py（放在仓库根目录）
+#
+# 原理：每 30 分钟抓取一次实时财经源，只推送「上次之后新增」的条目，
+#       去重状态用 actions/cache 保存，不产生额外提交。
+#
+# 需要的 Secret（可复用 TrendRadar 已配置的）：
+#   WEWORK_WEBHOOK_URL ：企业微信 Webhook
+#   WEWORK_MSG_TYPE    ：markdown（推荐）| text
+
+name: 全球财经快讯
+
+on:
+  schedule:
+    # 每 30 分钟一次（UTC）。想改成每小时： "0 * * * *"
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  flash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 恢复去重状态
+        uses: actions/cache@v4
+        with:
+          path: .flash_state.json
+          key: flash-state-${{ github.run_id }}
+          restore-keys: flash-state-
+
+      - name: 抓取并推送
+        env:
+          WEWORK_WEBHOOK_URL: ${{ secrets.WEWORK_WEBHOOK_URL }}
+          WEWORK_MSG_TYPE: ${{ secrets.WEWORK_MSG_TYPE }}
+        run: python flash_news.py --push-wework

@@ -1,0 +1,38 @@
+# 定时任务保活（防止 GitHub 因仓库长期无活动而停用 scheduled workflow）
+#
+# 放置位置：<你的 TrendRadar fork>/.github/workflows/keepalive.yml
+#
+# 原理：每天向仓库提交一次心跳文件，制造仓库活动，
+#       使 GitHub 不会停用 crawler.yml / econ-calendar.yml 等定时任务。
+
+name: 定时任务保活
+
+on:
+  schedule:
+    # 时间为 UTC；UTC 16:00 = 北京时间次日 00:00
+    - cron: "0 16 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 写入心跳并提交
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+          else
+            git commit -m "chore: keepalive $(date -u +%F)"
+            git pull --rebase --autostash
+            git push
+          fi
